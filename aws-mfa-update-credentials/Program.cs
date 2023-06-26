@@ -16,12 +16,15 @@
 
             FileIniDataParser credentialsIni = new();
 
-            IniData credentialsIniData = credentialsIni.ReadFile(
+            string credentialsPath =
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".aws/credentials.default"));
+                    ".aws/credentials");
 
-            KeyDataCollection section = credentialsIniData["default"];
+            IniData credentialsIniData = credentialsIni.ReadFile(
+                credentialsPath);
+
+            KeyDataCollection section = credentialsIniData["user-mfa-base"];
 
             string keyId = section["aws_access_key_id"];
             string accessKey = section["aws_secret_access_key"];
@@ -52,7 +55,7 @@
                     "Unable to get session token.");
             }
 
-            SectionData targetSection = new("default");
+            SectionData targetSection = new("user");
 
             targetSection.Keys["output"] = "json";
             targetSection.Keys["region"] = "us-east-1";
@@ -60,21 +63,12 @@
             targetSection.Keys["aws_secret_access_key"] = getSessionTokenResponse.Credentials.SecretAccessKey;
             targetSection.Keys["aws_session_token"] = getSessionTokenResponse.Credentials.SessionToken;
 
-            IniData targetData = new();
-            targetData.Sections.Add(
+            credentialsIniData.Sections.Add(
                 targetSection);
 
-            FileIniDataParser targetCredentialsIni = new();
-
-
-            string targetIniPath =
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".aws/credentials");
-
-            targetCredentialsIni.WriteFile(
-                targetIniPath,
-                targetData,
+            credentialsIni.WriteFile(
+                credentialsPath,
+                credentialsIniData,
                 Encoding.ASCII);
         }
 

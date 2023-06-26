@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "aws-mfa-update-credentials": {
+      "commandName": "Project",
+      "commandLineArgs": "123456"
+    }
+  }
+}
