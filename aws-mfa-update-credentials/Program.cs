@@ -1,5 +1,7 @@
 ﻿namespace aws_mfa_update_credentials
 {
+    using Amazon.CodeArtifact;
+    using Amazon.CodeArtifact.Model;
     using Amazon.Runtime;
     using Amazon.SecurityToken;
     using Amazon.SecurityToken.Model;
@@ -12,16 +14,25 @@
     {
         static async Task Main(string[] args)
         {
+            await UpdateCredentialsAsync(args);
+            await UpdateCodeArtifactAuthTokenAsync();
+        }
+
+        private static async Task UpdateCredentialsAsync(string[] args)
+        {
             string tokenCode = GetTokenCode(args);
 
             FileIniDataParser credentialsIni = new();
 
-            IniData credentialsIniData = credentialsIni.ReadFile(
+            string credentialsPath =
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".aws/credentials.default"));
+                    ".aws/credentials");
 
-            KeyDataCollection section = credentialsIniData["default"];
+            IniData credentialsIniData = credentialsIni.ReadFile(
+                credentialsPath);
+
+            KeyDataCollection section = credentialsIniData["user-mfa-base"];
 
             string keyId = section["aws_access_key_id"];
             string accessKey = section["aws_secret_access_key"];
@@ -52,7 +63,7 @@
                     "Unable to get session token.");
             }
 
-            SectionData targetSection = new("default");
+            SectionData targetSection = new("user");
 
             targetSection.Keys["output"] = "json";
             targetSection.Keys["region"] = "us-east-1";
@@ -60,22 +71,40 @@
             targetSection.Keys["aws_secret_access_key"] = getSessionTokenResponse.Credentials.SecretAccessKey;
             targetSection.Keys["aws_session_token"] = getSessionTokenResponse.Credentials.SessionToken;
 
-            IniData targetData = new();
-            targetData.Sections.Add(
+            credentialsIniData.Sections.Add(
                 targetSection);
 
-            FileIniDataParser targetCredentialsIni = new();
-
-
-            string targetIniPath =
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    ".aws/credentials");
-
-            targetCredentialsIni.WriteFile(
-                targetIniPath,
-                targetData,
+            credentialsIni.WriteFile(
+                credentialsPath,
+                credentialsIniData,
                 Encoding.ASCII);
+        }
+
+        private static async Task UpdateCodeArtifactAuthTokenAsync()
+        {
+            AmazonCodeArtifactClient client = new ();
+
+            GetAuthorizationTokenRequest request = new()
+            { 
+                Domain = "cybexys",
+                DomainOwner = "103410934580",
+                DurationSeconds = 43200
+            };
+
+            GetAuthorizationTokenResponse response = await client.GetAuthorizationTokenAsync(
+                request);
+
+            if (response.HttpStatusCode != System.Net.HttpStatusCode.OK)
+                throw new InvalidOperationException(
+                    $"Unable to get CodeArtifact authorization token. HttpStatusCode: {response.HttpStatusCode}.");
+
+            await Console.Out.WriteLineAsync(
+                $"CodeArtifactAuthToken: {response.AuthorizationToken}.");
+
+            Environment.SetEnvironmentVariable(
+                "CODEARTIFACT_AUTH_TOKEN", 
+                response.AuthorizationToken,
+                EnvironmentVariableTarget.User);
         }
 
         private static string GetTokenCode(string[] args)
